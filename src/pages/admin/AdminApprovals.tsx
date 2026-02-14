@@ -18,7 +18,20 @@ const AdminApprovals: React.FC = () => {
     const [viewScreenshot, setViewScreenshot] = useState<BookingResponse | null>(null);
     const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
 
-    useEffect(() => { getAdminBookings().then(d => { setBookings(d); setLoading(false); }); }, []);
+    useEffect(() => {
+        const fetchBookings = async () => {
+            try {
+                const d = await getAdminBookings();
+                setBookings(d);
+            } catch (err) {
+                console.error('Failed to fetch bookings:', err);
+                setBookings([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBookings();
+    }, []);
 
     const pending = bookings.filter(b => b.status === 'pending');
 

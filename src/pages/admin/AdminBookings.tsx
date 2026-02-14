@@ -23,7 +23,20 @@ const AdminBookings: React.FC = () => {
     const [branchFilter, setBranchFilter] = useState<string>('all');
     const [snack, setSnack] = useState('');
 
-    useEffect(() => { getAdminBookings().then(d => { setBookings(d); setLoading(false); }); }, []);
+    useEffect(() => {
+        const fetchBookings = async () => {
+            try {
+                const d = await getAdminBookings();
+                setBookings(d);
+            } catch (err) {
+                console.error('Failed to fetch bookings:', err);
+                setBookings([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBookings();
+    }, []);
 
     const handleRevoke = async (id: string) => {
         try {

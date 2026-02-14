@@ -31,9 +31,14 @@ const AdminSeats: React.FC = () => {
 
     const loadSeats = async () => {
         setLoading(true);
-        const data = await getAdminSeats();
-        setSeats(data);
-        setLoading(false);
+        try {
+            const data = await getAdminSeats();
+            setSeats(data);
+        } catch (err) {
+            console.error('Failed to load seats:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleToggle = async (seatId: number, currentBlocked: boolean) => {

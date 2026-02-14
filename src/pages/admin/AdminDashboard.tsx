@@ -18,9 +18,18 @@ const AdminDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        Promise.all([getDashboardStats(), getAdminBookings()]).then(([s, b]) => {
-            setStats(s); setBookings(b); setLoading(false);
-        });
+        const fetchData = async () => {
+            try {
+                const [s, b] = await Promise.all([getDashboardStats(), getAdminBookings()]);
+                setStats(s);
+                setBookings(b);
+            } catch (err) {
+                console.error('Failed to fetch dashboard data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
     }, []);
 
     if (loading) return <Box><LinearProgress /></Box>;

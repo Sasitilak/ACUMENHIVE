@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useEffect, type ReactNode }
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
-// ─── Test credentials (works without Supabase) ──────────────────
-const TEST_PHONE = '+91 00000 00000';
-const TEST_OTP = '123456';
+// ─── Test credentials (dev only — stripped from production builds) ───
+const TEST_PHONE = import.meta.env.DEV ? '+91 00000 00000' : '';
+const TEST_OTP = import.meta.env.DEV ? '123456' : '';
 
 interface AuthContextType {
     user: User | null;
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (sessionStorage.getItem('test_admin') === 'true') {
             setTestMode(true);
             setIsAdmin(true);
-            setUser({ id: 'test-admin', phone: TEST_PHONE } as User);
+            setUser({ id: 'test-admin', phone: TEST_PHONE || 'test' } as User);
             setLoading(false);
             return;
         }
@@ -65,14 +65,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const signInWithPhone = async (phone: string): Promise<{ error: string | null }> => {
-        // Test mode: accept test phone without Supabase
+        // Test mode: accept test phone without Supabase (dev only)
         const cleanPhone = phone.replace(/\s/g, '');
-        if (cleanPhone === TEST_PHONE.replace(/\s/g, '')) {
+        if (TEST_PHONE && cleanPhone === TEST_PHONE.replace(/\s/g, '')) {
             return { error: null }; // Skip real OTP
         }
 
         if (!isSupabaseConfigured()) {
-            return { error: 'Supabase not configured. Use test number: ' + TEST_PHONE };
+            return { error: 'Supabase not configured' };
         }
 
         const { error } = await supabase.auth.signInWithOtp({ phone });
@@ -82,17 +82,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const verifyOtp = async (phone: string, token: string): Promise<{ error: string | null }> => {
         const cleanPhone = phone.replace(/\s/g, '');
 
-        // Test mode: accept test credentials
-        if (cleanPhone === TEST_PHONE.replace(/\s/g, '') && token === TEST_OTP) {
-            setTestMode(true);
-            setIsAdmin(true);
-            setUser({ id: 'test-admin', phone: TEST_PHONE } as User);
-            sessionStorage.setItem('test_admin', 'true');
-            return { error: null };
-        }
-
-        if (cleanPhone === TEST_PHONE.replace(/\s/g, '')) {
-            return { error: 'Invalid OTP. Test OTP is: ' + TEST_OTP };
+        // Test mode: accept test credentials (dev only)
+        if (TEST_PHONE && cleanPhone === TEST_PHONE.replace(/\s/g, '')) {
+            if (token === TEST_OTP) {
+                setTestMode(true);
+                setIsAdmin(true);
+                setUser({ id: 'test-admin', phone: TEST_PHONE } as User);
+                sessionStorage.setItem('test_admin', 'true');
+                return { error: null };
+            }
+            return { error: 'Invalid OTP' };
         }
 
         if (!isSupabaseConfigured()) {

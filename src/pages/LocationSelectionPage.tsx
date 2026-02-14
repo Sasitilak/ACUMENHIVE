@@ -29,7 +29,17 @@ const LocationSelectionPage: React.FC = () => {
 
     useEffect(() => {
         if (!selectedSlot) { navigate('/slots'); return; }
-        getBranches().then(d => { setBranches(d); setLoading(false); });
+        const fetchBranches = async () => {
+            try {
+                const d = await getBranches();
+                setBranches(d);
+            } catch (err) {
+                console.error('Failed to fetch branches:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBranches();
     }, [selectedSlot, navigate]);
 
     const curBranch = branches.find(b => b.id === selectedBranch);

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
-import { createTheme, type Theme } from '@mui/material/styles';
+import { createTheme, ThemeProvider as MuiThemeProvider, type Theme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -149,7 +150,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     return (
         <ThemeContext.Provider value={{ mode, toggleMode, theme }}>
-            {children}
+            <MuiThemeProvider theme={theme}>
+                <CssBaseline />
+                {children}
+            </MuiThemeProvider>
         </ThemeContext.Provider>
     );
 };

@@ -62,10 +62,15 @@ export const getSlots = async (): Promise<Slot[]> => {
 export const getBranches = async (): Promise<Branch[]> => {
     if (!isSupabaseConfigured()) { await delay(400); return mockBranches; }
 
-    // Fetch branches, floors, and available seats
-    const { data: branchData } = await supabase.from('branches').select('*').order('id');
-    const { data: floorData } = await supabase.from('floors').select('*').order('floor_number');
-    const { data: seatData } = await supabase.from('available_seats').select('*');
+    // Fetch branches, floors, and available seats — check errors
+    const { data: branchData, error: branchError } = await supabase.from('branches').select('*').order('id');
+    if (branchError) throw new Error(`Failed to fetch branches: ${branchError.message}`);
+
+    const { data: floorData, error: floorError } = await supabase.from('floors').select('*').order('floor_number');
+    if (floorError) throw new Error(`Failed to fetch floors: ${floorError.message}`);
+
+    const { data: seatData, error: seatError } = await supabase.from('available_seats').select('*');
+    if (seatError) throw new Error(`Failed to fetch seats: ${seatError.message}`);
 
     if (!branchData || !floorData || !seatData) return [];
 
@@ -112,24 +117,30 @@ export const createBooking = async (
     }
 
     // Resolve floor_id and seat_id from location
-    const { data: floorRow } = await supabase
+    const { data: floorRow, error: floorError } = await supabase
         .from('floors')
         .select('id')
         .eq('branch_id', location.branch)
         .eq('floor_number', location.floor)
         .single();
 
-    const { data: seatRow } = await supabase
+    if (floorError || !floorRow) throw new Error(`Floor not found for branch ${location.branch}, floor ${location.floor}`);
+
+    const { data: seatRow, error: seatError } = await supabase
         .from('seats')
         .select('id')
-        .eq('floor_id', floorRow!.id)
+        .eq('floor_id', floorRow.id)
         .eq('seat_no', location.seatNo)
         .single();
 
-    // Get slot info
-    const { data: slotRow } = await supabase.from('slots').select('*').eq('id', slotId).single();
+    if (seatError || !seatRow) throw new Error(`Seat '${location.seatNo}' not found on floor ${location.floor}`);
 
-    // Parse dates
+    // Get slot info
+    const { data: slotRow, error: slotError } = await supabase.from('slots').select('*').eq('id', slotId).single();
+
+    if (slotError || !slotRow) throw new Error(`Slot '${slotId}' not found`);
+
+    // Parse dates — use UTC-safe date-only math to avoid timezone drift
     let startDate = slotDate;
     let endDate = slotDate;
     if (slotDate.includes(' to ')) {
@@ -137,10 +148,12 @@ export const createBooking = async (
         startDate = parts[0];
         endDate = parts[1];
     } else {
-        // Calculate end date from slot duration
-        const start = new Date(slotDate);
-        start.setDate(start.getDate() + (slotRow?.duration_days ?? 30));
-        endDate = start.toISOString().split('T')[0];
+        // Calculate end date from slot duration using UTC to avoid timezone issues
+        const [year, month, day] = slotDate.split('-').map(Number);
+        const startMs = Date.UTC(year, month - 1, day);
+        const endMs = startMs + (slotRow.duration_days ?? 30) * 86_400_000;
+        const endDt = new Date(endMs);
+        endDate = `${endDt.getUTCFullYear()}-${String(endDt.getUTCMonth() + 1).padStart(2, '0')}-${String(endDt.getUTCDate()).padStart(2, '0')}`;
     }
 
     // Upload screenshot
@@ -167,11 +180,11 @@ export const createBooking = async (
             customer_email: details.email || null,
             slot_id: slotId,
             branch_id: location.branch,
-            floor_id: floorRow!.id,
-            seat_id: seatRow!.id,
+            floor_id: floorRow.id,
+            seat_id: seatRow.id,
             start_date: startDate,
             end_date: endDate,
-            amount: slotRow?.price ?? 0,
+            amount: slotRow.price ?? 0,
             payment_screenshot_url: screenshotUrl || null,
             status: 'pending',
         })
@@ -183,7 +196,7 @@ export const createBooking = async (
     return {
         id: booking.id,
         slotId: booking.slot_id,
-        slotTime: slotRow?.name ?? '',
+        slotTime: slotRow.name ?? '',
         slotDate: booking.start_date,
         location,
         customerName: booking.customer_name,

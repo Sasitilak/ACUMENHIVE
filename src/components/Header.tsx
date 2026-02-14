@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppBar, Toolbar, Typography, Box, Button, IconButton, useTheme } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Button, ButtonBase, IconButton, useTheme } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -27,9 +27,10 @@ const Header: React.FC = () => {
             }}
         >
             <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: { xs: 56, md: 64 } }}>
-                <Box
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                <ButtonBase
                     onClick={() => navigate('/')}
+                    aria-label="StudySpot home"
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer', '&:hover': { opacity: 0.8 }, borderRadius: 1, p: 0.5 }}
                 >
                     <Box sx={{
                         width: 32, height: 32, borderRadius: '8px',
@@ -44,7 +45,7 @@ const Header: React.FC = () => {
                     }}>
                         StudySpot
                     </Typography>
-                </Box>
+                </ButtonBase>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1 } }}>
                     {!isHome && !isAdmin && (
