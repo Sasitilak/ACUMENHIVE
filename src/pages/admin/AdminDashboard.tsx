@@ -50,7 +50,7 @@ const AdminDashboard: React.FC = () => {
         { label: 'Pending Approvals', value: stats.pendingApprovals, icon: <PendingActionsIcon />, color: '#f59e0b' },
     ];
 
-    const maxBooking = Math.max(...stats.monthlyBookings.map(m => m.count));
+    const maxBooking = Math.max(1, ...stats.monthlyBookings.map(m => m.count));
 
     return (
         <Box>

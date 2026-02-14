@@ -31,12 +31,12 @@ const mockSlots: Slot[] = [
 ];
 
 const mockBookings: BookingResponse[] = [
-    { id: 'BK1001', slotId: 's1', slotTime: '1 Month', slotDate: '2026-02-14', location: { branch: 1, floor: 1, roomNo: 'F1', seatNo: 'S3' }, customerName: 'Arun Kumar', customerPhone: '+91 9876543210', amount: 1000, status: 'pending', paymentScreenshotUrl: '', createdAt: '2026-02-14T08:30:00Z' },
-    { id: 'BK1002', slotId: 's2', slotTime: '2 Weeks', slotDate: '2026-02-14', location: { branch: 2, floor: 2, roomNo: 'F2', seatNo: 'S7' }, customerName: 'Priya Sharma', customerPhone: '+91 9123456780', amount: 600, status: 'pending', paymentScreenshotUrl: '', createdAt: '2026-02-14T09:15:00Z' },
+    { id: 'BK1001', slotId: 's1', slotTime: '1 Month', slotDate: '2026-02-14', location: { branch: 1, floor: 1, roomNo: 'F1', seatNo: 'S3' }, customerName: 'Arun Kumar', customerPhone: '+91 9876543210', amount: 1000, status: 'pending', paymentScreenshotUrl: 'https://placehold.co/400x600/222/aaa?text=Payment+Screenshot', createdAt: '2026-02-14T08:30:00Z' },
+    { id: 'BK1002', slotId: 's2', slotTime: '2 Weeks', slotDate: '2026-02-14', location: { branch: 2, floor: 2, roomNo: 'F2', seatNo: 'S7' }, customerName: 'Priya Sharma', customerPhone: '+91 9123456780', amount: 600, status: 'pending', paymentScreenshotUrl: 'https://placehold.co/400x600/222/aaa?text=Payment+Screenshot', createdAt: '2026-02-14T09:15:00Z' },
     { id: 'BK1003', slotId: 's3', slotTime: '1 Month', slotDate: '2026-02-13', location: { branch: 1, floor: 2, roomNo: 'F2', seatNo: 'S1' }, customerName: 'Ravi Patel', customerPhone: '+91 9988776655', amount: 1000, status: 'confirmed', createdAt: '2026-02-13T07:00:00Z' },
     { id: 'BK1004', slotId: 's4', slotTime: '3 Months', slotDate: '2026-02-12', location: { branch: 2, floor: 3, roomNo: 'F3', seatNo: 'S2' }, customerName: 'Sneha Reddy', customerPhone: '+91 9090909090', amount: 2700, status: 'confirmed', createdAt: '2026-02-12T14:00:00Z' },
     { id: 'BK1005', slotId: 's5', slotTime: '1 Week', slotDate: '2026-02-11', location: { branch: 1, floor: 1, roomNo: 'F1', seatNo: 'S10' }, customerName: 'Vikram Singh', customerPhone: '+91 8080808080', amount: 350, status: 'rejected', createdAt: '2026-02-11T06:45:00Z' },
-    { id: 'BK1006', slotId: 's6', slotTime: '1 Month', slotDate: '2026-02-14', location: { branch: 2, floor: 1, roomNo: 'F1', seatNo: 'S15' }, customerName: 'Meera Nair', customerPhone: '+91 7070707070', amount: 1000, status: 'pending', paymentScreenshotUrl: '', createdAt: '2026-02-14T10:30:00Z' },
+    { id: 'BK1006', slotId: 's6', slotTime: '1 Month', slotDate: '2026-02-14', location: { branch: 2, floor: 1, roomNo: 'F1', seatNo: 'S15' }, customerName: 'Meera Nair', customerPhone: '+91 7070707070', amount: 1000, status: 'pending', paymentScreenshotUrl: 'https://placehold.co/400x600/222/aaa?text=Payment+Screenshot', createdAt: '2026-02-14T10:30:00Z' },
 ];
 
 // ─── Public APIs ────────────────────────────────────────────────
@@ -347,10 +347,12 @@ export const getAdminSeats = async () => {
         );
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('seats')
         .select('id, seat_no, is_blocked, floor_id, floors(branch_id, floor_number, branches(name))')
         .order('id');
+
+    if (error) throw new Error(`getAdminSeats failed: ${error.message}`);
 
     return (data ?? []).map((s: Record<string, unknown>) => {
         const floor = s.floors as Record<string, unknown> | null;
@@ -388,7 +390,8 @@ export const getAdminSlots = async () => {
         }));
     }
 
-    const { data } = await supabase.from('slots').select('*').order('duration_days');
+    const { data, error } = await supabase.from('slots').select('*').order('duration_days');
+    if (error) throw new Error(`getAdminSlots failed: ${error.message}`);
     return data ?? [];
 };
 

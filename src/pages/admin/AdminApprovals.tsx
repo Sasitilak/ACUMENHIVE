@@ -99,16 +99,15 @@ const AdminApprovals: React.FC = () => {
                                         ))}
                                     </Box>
 
-                                    {b.paymentScreenshotUrl && (
-                                        <Button
-                                            fullWidth variant="outlined" size="small"
-                                            startIcon={<ImageIcon />}
-                                            onClick={() => setViewScreenshot(b)}
-                                            sx={{ mb: 2 }}
-                                        >
-                                            View Screenshot
-                                        </Button>
-                                    )}
+                                    <Button
+                                        fullWidth variant="outlined" size="small"
+                                        startIcon={<ImageIcon />}
+                                        onClick={() => setViewScreenshot(b)}
+                                        disabled={!b.paymentScreenshotUrl}
+                                        sx={{ mb: 2 }}
+                                    >
+                                        {b.paymentScreenshotUrl ? 'View Screenshot' : 'No Screenshot'}
+                                    </Button>
 
                                     <Box sx={{ display: 'flex', gap: 1 }}>
                                         <Button
