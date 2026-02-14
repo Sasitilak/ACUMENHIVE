@@ -26,8 +26,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [testMode, setTestMode] = useState(false);
 
     useEffect(() => {
-        // Check if we were previously in test mode
-        if (sessionStorage.getItem('test_admin') === 'true') {
+        // Check if we were previously in test mode (dev only)
+        if (import.meta.env.DEV && sessionStorage.getItem('test_admin') === 'true') {
             setTestMode(true);
             setIsAdmin(true);
             setUser({ id: 'test-admin', phone: TEST_PHONE || 'test' } as User);

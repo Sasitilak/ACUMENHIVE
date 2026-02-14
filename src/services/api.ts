@@ -214,7 +214,8 @@ export const getBooking = async (id: string): Promise<BookingResponse | null> =>
         await delay(300);
         return mockBookings.find(b => b.id === id) ?? null;
     }
-    const { data } = await supabase.from('bookings').select('*, slots(name)').eq('id', id).single();
+    const { data, error } = await supabase.from('bookings').select('*, slots(name)').eq('id', id).maybeSingle();
+    if (error) throw new Error(`getBooking: ${error.message}`);
     if (!data) return null;
     return mapBookingRow(data);
 };
@@ -246,7 +247,8 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
         };
     }
 
-    const { data: bookings } = await supabase.from('bookings').select('status, amount, created_at');
+    const { data: bookings, error } = await supabase.from('bookings').select('status, amount, created_at');
+    if (error) throw new Error(`getDashboardStats: ${error.message}`);
     const all = bookings ?? [];
 
     const totalBookings = all.length;

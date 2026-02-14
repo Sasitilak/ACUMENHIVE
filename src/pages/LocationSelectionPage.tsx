@@ -54,9 +54,11 @@ const LocationSelectionPage: React.FC = () => {
         setSelectedFloor(num); setSelectedSeat(null); setSelectedLocation(null);
     };
     const handleSeatSelect = (seat: Seat) => {
-        if (!seat.available || !selectedBranch || !selectedFloor) return;
+        if (!seat.available || !selectedBranch || !selectedFloor || !curFloor) return;
+        const foundRoom = curFloor.rooms.find(r => r.seats.some(s => s.seatNo === seat.seatNo));
+        if (!foundRoom) return;
         setSelectedSeat(seat.seatNo);
-        setSelectedLocation({ branch: selectedBranch as 1 | 2, floor: selectedFloor, roomNo: curFloor!.rooms[0].roomNo, seatNo: seat.seatNo });
+        setSelectedLocation({ branch: selectedBranch as 1 | 2, floor: selectedFloor, roomNo: foundRoom.roomNo, seatNo: seat.seatNo });
     };
 
     if (loading) return (
