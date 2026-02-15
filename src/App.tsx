@@ -85,9 +85,12 @@ const AppContent: React.FC = () => {
   );
 };
 
+import { Analytics } from '@vercel/analytics/react';
+
 const App: React.FC = () => (
   <ThemeProvider>
     <AppContent />
+    <Analytics />
   </ThemeProvider>
 );
 
