@@ -1006,6 +1006,10 @@ export const addRoom = async (branchId: number, floorNumber: number, room: Omit<
     if (floorError || !floorRow) throw new Error('Floor not found');
 
     // 2. Insert Room
+    const from = room.seatsFrom || 1;
+    const to = room.seatsTo || (room.seatsCount ? from + room.seatsCount - 1 : from + 9);
+    const count = (to - from + 1);
+
     const { data: newRoomData, error: roomError } = await supabase
         .from('rooms')
         .insert({
@@ -1014,7 +1018,7 @@ export const addRoom = async (branchId: number, floorNumber: number, room: Omit<
             name: room.name,
             is_ac: room.isAc,
             price_daily: room.price_daily || 50,
-            seats_count: room.seatsCount,
+            seats_count: count,
             pricing_tiers: room.pricing_tiers || null
         })
         .select()
@@ -1024,11 +1028,10 @@ export const addRoom = async (branchId: number, floorNumber: number, room: Omit<
 
     // 3. Insert Seats
     const seatsToInsert = [];
-    const count = room.seatsCount || 0;
-    for (let i = 1; i <= count; i++) {
+    for (let i = from; i <= to; i++) {
         seatsToInsert.push({
             room_id: newRoomData.id,
-            seat_no: `S${i}`,
+            seat_no: `${i}`,
             is_blocked: false
         });
     }
@@ -1045,13 +1048,13 @@ export const addRoom = async (branchId: number, floorNumber: number, room: Omit<
         isAc: newRoomData.is_ac,
         price_daily: newRoomData.price_daily,
         seats: seatsToInsert.map((s, idx) => ({
-            id: `generated-${idx}`, // The ID is DB generated, but we don't have it here without re-fetch. 
-            // Ideally we select back. But for UI update, it's okay or we do a re-fetch.
-            // Let's just return what we have.
+            id: `generated-${idx}`,
             seatNo: s.seat_no,
             available: true
         })),
-        seatsCount: newRoomData.seats_count
+        seatsCount: newRoomData.seats_count,
+        seatsFrom: from,
+        seatsTo: to
     };
 };
 
@@ -1090,100 +1093,80 @@ export const updateRoom = async (branchId: number, floorNumber: number, roomId: 
         return room;
     }
 
-    // 1. Get current room to know seat count and other details
+    // 1. Get current room with its seats
     const { data: currentRoom, error: fetchError } = await supabase
         .from('rooms')
-        .select('*, seats(count)')
+        .select('*, seats(id, seat_no)')
         .eq('id', roomId)
         .single();
 
     if (fetchError || !currentRoom) throw new Error('Room not found');
 
-    const currentSeatCount = currentRoom.seats_count || 0; // or count from relation
-    // Note: seats(count) gives count object? No, Supabase count is tricky in single select. 
-    // Easier to rely on seats_count column if reliable, or fetch seats.
-    // We added seats_count to schema earlier, let's use it.
+    const currentSeats = (currentRoom.seats as any[]) || [];
+    const currentSeatNos = currentSeats.map(s => parseInt(s.seat_no)).filter(n => !isNaN(n));
+    const currentFrom = currentSeatNos.length > 0 ? Math.min(...currentSeatNos) : 1;
+    const currentTo = currentSeatNos.length > 0 ? Math.max(...currentSeatNos) : 0;
 
-    // 2. Prepare updates
+    const from = updates.seatsFrom !== undefined ? updates.seatsFrom : currentFrom;
+    const to = updates.seatsTo !== undefined ? updates.seatsTo : currentTo;
+    const newCount = (to - from + 1);
+
+    // 2. Prepare room field updates
     const roomUpdates: any = {};
     if (updates.name) roomUpdates.name = updates.name;
     if (updates.roomNo) roomUpdates.room_no = updates.roomNo;
     if (updates.isAc !== undefined) roomUpdates.is_ac = updates.isAc;
     if (updates.price_daily !== undefined) roomUpdates.price_daily = updates.price_daily;
-    if (updates.seatsCount !== undefined) roomUpdates.seats_count = updates.seatsCount;
     if (updates.pricing_tiers !== undefined) roomUpdates.pricing_tiers = updates.pricing_tiers;
+    if (newCount !== currentRoom.seats_count) roomUpdates.seats_count = newCount;
 
     if (Object.keys(roomUpdates).length > 0) {
-        const { error } = await supabase.from('rooms').update(roomUpdates).eq('id', roomId);
-        if (error) throw error;
+        const { error: updateErr } = await supabase.from('rooms').update(roomUpdates).eq('id', roomId);
+        if (updateErr) throw updateErr;
     }
 
-    // 3. Handle Seat Changes
-    if (updates.seatsCount !== undefined && updates.seatsCount !== currentSeatCount) {
-        const newCount = updates.seatsCount;
-
-        if (newCount > currentSeatCount) {
-            // Add seats
-            const seatsToInsert = [];
-            for (let i = currentSeatCount + 1; i <= newCount; i++) {
-                seatsToInsert.push({
+    // 3. Handle Seat Range Changes
+    if (updates.seatsFrom !== undefined || updates.seatsTo !== undefined) {
+        // Find seats to ADD
+        const seatsToAdd = [];
+        for (let i = from; i <= to; i++) {
+            if (!currentSeatNos.includes(i)) {
+                seatsToAdd.push({
                     room_id: roomId,
-                    seat_no: `S${i}`,
+                    seat_no: `${i}`,
                     is_blocked: false
                 });
             }
-            if (seatsToInsert.length > 0) {
-                const { error: insertError } = await supabase.from('seats').insert(seatsToInsert);
-                if (insertError) throw insertError;
-            }
-        } else {
-            // Remove seats (highest numbers first)
-            // Safety Check: Bookings?
-            // "hasActiveBookings" logic might be needed here. 
-            // For now, let's try to delete, if RLS/Constraints don't block.
-            // But we should be user friendly.
-            // Let's check for bookings on these seats.
+        }
+        if (seatsToAdd.length > 0) {
+            const { error: insErr } = await supabase.from('seats').insert(seatsToAdd);
+            if (insErr) throw insErr;
+        }
 
-            // Find seat IDs to remove
-            // We need to know specific seat IDs? Or just delete by room_id and seat_no > newCount?
-            // Our seat_no format is "S1", "S2". 
-            // "S10" > "S2" string comparison is false! "S10" < "S2" is false. "S10" comes before "S2"? No.
-            // "S" + number. 
-            // We should rely on parsing or specific deletion.
-            // Let's attempt to delete where seat_no is in the range.
-
-            // Build list of seat_nos to delete
-            const seatsToRemove = [];
-            for (let i = newCount + 1; i <= currentSeatCount; i++) {
-                seatsToRemove.push(`S${i}`);
-            }
-
-            // Check bookings?
-            // This is complex in one go. 
-            // Let's assume the user knows what they are doing or let the DB fail if FK constraints exist (bookings link to seats).
-            // Schema: bookings -> seat_id references seats(id). 
-            // So if we delete a seat with bookings, it will fail unless cascade.
-            // Our schema usually doesn't cascade bookings on seat delete (maybe).
-            // Schema says: `seat_id bigint references seats(id) not null`. No cascade specified on booking.
-            // So it WILL fail if booked. Perfect.
-
-            const { error: deleteError } = await supabase
+        // Find seats to REMOVE
+        const seatNosToRemove = currentSeatNos.filter(n => n < from || n > to);
+        if (seatNosToRemove.length > 0) {
+            const seatNosStr = seatNosToRemove.map(n => String(n));
+            const { error: delErr } = await supabase
                 .from('seats')
                 .delete()
                 .eq('room_id', roomId)
-                .in('seat_no', seatsToRemove);
+                .in('seat_no', seatNosStr);
 
-            if (deleteError) throw new Error("Cannot delete seats with active bookings.");
+            if (delErr) {
+                console.error("Deletion failed:", delErr);
+                throw new Error("Cannot remove seats that have active bookings or are otherwise protected.");
+            }
         }
     }
 
     return {
         ...currentRoom,
-        ...updates,
-        // we should really refetch or reconstruct
+        ...roomUpdates,
         id: roomId,
-        price_daily: updates.price_daily ?? currentRoom.price_daily,
-        isAc: updates.isAc ?? currentRoom.is_ac
+        seatsFrom: from,
+        seatsTo: to,
+        seatsCount: newCount
     } as Room;
 };
 

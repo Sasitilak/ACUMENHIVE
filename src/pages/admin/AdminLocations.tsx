@@ -365,13 +365,16 @@ const LocationDialog: React.FC<LocationDialogProps> = ({ open, type, mode, data,
                 } else if (data.pricing_tiers) {
                     initialPricing = { ...initialPricing, ...data.pricing_tiers };
                 }
-                setFormData({ ...data, seatsCount: data.seats?.length || 0, price_daily: data.price_daily || 50, isAc: data.isAc || false, pricing_tiers: initialPricing });
+                const seatNos = (data.seats || []).map((s: any) => parseInt(String(s.seatNo).replace(/\D/g, ''))).filter((n: any) => !isNaN(n));
+                const sFrom = seatNos.length > 0 ? Math.min(...seatNos) : 1;
+                const sTo = seatNos.length > 0 ? Math.max(...seatNos) : 10;
+                setFormData({ ...data, seatsCount: data.seats?.length || 0, seatsFrom: sFrom, seatsTo: sTo, price_daily: data.price_daily || 50, isAc: data.isAc || false, pricing_tiers: initialPricing });
             }
             else setFormData(data);
         } else {
             if (type === 'floor') setFormData({ floorNumber: 1 });
             else if (type === 'room') setFormData({
-                name: '', roomNo: '', seatsCount: 10, price_daily: 50, isAc: false,
+                name: '', roomNo: '', seatsFrom: 1, seatsTo: 10, price_daily: 50, isAc: false,
                 pricing_tiers: {
                     price_1w: 500,
                     price_2w: 900,
@@ -433,12 +436,21 @@ const LocationDialog: React.FC<LocationDialogProps> = ({ open, type, mode, data,
                             control={<Switch checked={formData.isAc || false} onChange={e => setFormData({ ...formData, isAc: e.target.checked })} />}
                             label="AC Room"
                         />
-                        <TextField
-                            label="Number of Seats" type="number" fullWidth size="small"
-                            value={formData.seatsCount || 10}
-                            onChange={(e) => setFormData({ ...formData, seatsCount: parseInt(e.target.value) })}
-                            helperText="Seats will be automatically generated (S1, S2, ...)"
-                        />
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <TextField
+                                label="Seats From" type="number" fullWidth size="small"
+                                value={formData.seatsFrom || 1}
+                                onChange={(e) => setFormData({ ...formData, seatsFrom: parseInt(e.target.value) })}
+                            />
+                            <TextField
+                                label="Seats To" type="number" fullWidth size="small"
+                                value={formData.seatsTo || 10}
+                                onChange={(e) => setFormData({ ...formData, seatsTo: parseInt(e.target.value) })}
+                            />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                            Seats will be generated from {formData.seatsFrom || 1} to {formData.seatsTo || 10}
+                        </Typography>
 
                         <Divider sx={{ my: 1 }} />
                         <Typography variant="subtitle2" fontWeight={700}>Weekly Pricing Tiers</Typography>
