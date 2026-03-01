@@ -61,6 +61,8 @@ export interface Room {
     seats: Seat[];
     isAc: boolean;
     seatsCount?: number;
+    seatsFrom?: number;
+    seatsTo?: number;
     price_daily?: number;
     pricing_tiers?: PricingConfig;
 }
