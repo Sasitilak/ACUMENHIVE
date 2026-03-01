@@ -21,7 +21,11 @@ const BookingSummary: React.FC<{ showPrice?: boolean }> = ({ showPrice = true })
         { icon: <CalendarTodayIcon sx={{ fontSize: 18 }} />, label: isRange ? 'Period' : 'Date', value: displayDate },
         { icon: <CalendarTodayIcon sx={{ fontSize: 18 }} />, label: 'Duration', value: selectedSlot.time },
         ...(selectedLocation ? [
-            { icon: <LocationOnIcon sx={{ fontSize: 18 }} />, label: 'Location', value: `Branch ${selectedLocation.branch} · Floor ${selectedLocation.floor} · Room ${selectedLocation.roomNo}` },
+            {
+                icon: <LocationOnIcon sx={{ fontSize: 18 }} />,
+                label: 'Location',
+                value: `${selectedLocation.branchName || `Branch ${selectedLocation.branch}`} · Floor ${selectedLocation.floor} · ${selectedLocation.roomNo}`
+            },
             { icon: <ChairIcon sx={{ fontSize: 18 }} />, label: 'Seat', value: selectedLocation.seatNo },
         ] : []),
     ];
@@ -43,9 +47,9 @@ const BookingSummary: React.FC<{ showPrice?: boolean }> = ({ showPrice = true })
                         <Box sx={{ color: 'primary.main' }}>{r.icon}</Box>
                         <Box>
                             <Typography variant="caption" color="text.secondary">{r.label}</Typography>
-                            <Typography variant="body2" fontWeight={500}>
+                            <Box sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.primary', display: 'flex', alignItems: 'center' }}>
                                 {r.label === 'Seat' ? <Chip label={r.value} size="small" color="primary" sx={{ fontWeight: 600 }} /> : r.value}
-                            </Typography>
+                            </Box>
                         </Box>
                     </Box>
                 ))}
@@ -55,7 +59,9 @@ const BookingSummary: React.FC<{ showPrice?: boolean }> = ({ showPrice = true })
                     <Divider sx={{ my: 2 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary">Total</Typography>
-                        <Typography variant="h5" fontWeight={700} color="primary.main">₹{selectedSlot.price}</Typography>
+                        <Typography variant="h5" fontWeight={700} color="primary.main">
+                            {selectedSlot.price > 0 ? `₹${selectedSlot.price}` : '—'}
+                        </Typography>
                     </Box>
                 </>
             )}

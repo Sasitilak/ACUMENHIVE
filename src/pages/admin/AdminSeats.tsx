@@ -15,6 +15,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { getAdminSeats, blockSeat, unblockSeat, createAdminBooking, sendWhatsAppConfirmation, getAdminBookings, revokeBooking } from '../../services/api';
 import type { BookingResponse, Floor, Branch } from '../../types/booking';
+import { calculatePrice } from '../../utils/pricing';
 
 interface SeatRow {
     id: number;
@@ -28,6 +29,7 @@ interface SeatRow {
     room_name: string;
     room_no: string;
     price_daily: number;
+    pricing_tiers?: import('../../types/booking').PricingConfig;
 }
 
 const AdminSeats: React.FC = () => {
@@ -46,6 +48,7 @@ const AdminSeats: React.FC = () => {
     const [customerPhone, setCustomerPhone] = useState('');
     const [startDate, setStartDate] = useState<Dayjs | null>(dayjs());
     const [endDate, setEndDate] = useState<Dayjs | null>(dayjs().add(1, 'month'));
+    const [bookingAmount, setBookingAmount] = useState<number>(0);
     const [submitting, setSubmitting] = useState(false);
 
     // Detail Dialog state
@@ -84,9 +87,27 @@ const AdminSeats: React.FC = () => {
         if (seatRow.is_blocked || booking) {
             setDetailsDialog(true);
         } else {
+            // Pre-calculate price for new booking
+            updatePrice(seatRow, startDate, endDate);
             setBookingDialog(true);
         }
     };
+
+    const updatePrice = (seat: SeatRow | null, start: Dayjs | null, end: Dayjs | null) => {
+        if (!seat || !start || !end) return;
+        const days = end.diff(start, 'day') + 1;
+        const tiers = seat.pricing_tiers || { price_1w: 500, price_2w: 900, price_3w: 1200, price_1m: 1500 };
+        const weeks = Math.ceil(days / 7);
+        const priceInfo = calculatePrice(weeks, tiers);
+        setBookingAmount(priceInfo.total);
+    };
+
+    // Watch for date changes in dialog to update price
+    useEffect(() => {
+        if (bookingDialog && selectedSeat) {
+            updatePrice(selectedSeat, startDate, endDate);
+        }
+    }, [startDate, endDate]);
 
     const handleCreateBooking = async () => {
         if (!selectedSeat || !customerName || !customerPhone || !startDate || !endDate) return;
@@ -102,10 +123,7 @@ const AdminSeats: React.FC = () => {
             };
             const start = startDate.format('YYYY-MM-DD');
             const end = endDate.format('YYYY-MM-DD');
-
-            // Calculate duration and amount
-            const days = endDate.diff(startDate, 'day') + 1;
-            const amount = days * (selectedSeat.price_daily || 50);
+            const amount = bookingAmount;
 
             // Perform transactional booking creation
             let bookingId: string | null = null;
@@ -371,6 +389,15 @@ const AdminSeats: React.FC = () => {
                                     slotProps={{ textField: { fullWidth: true } }}
                                 />
                             </Box>
+                            <TextField
+                                label="Total Amount (₹)"
+                                type="number"
+                                fullWidth
+                                variant="outlined"
+                                value={bookingAmount}
+                                onChange={(e) => setBookingAmount(Number(e.target.value))}
+                                helperText="Defaults to system pricing, can be overridden"
+                            />
                         </Box>
                     </DialogContent>
                     <DialogActions sx={{ p: 2 }}>

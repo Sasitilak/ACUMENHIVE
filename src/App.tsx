@@ -20,8 +20,12 @@ import AdminSeats from './pages/admin/AdminSeats';
 import AdminHolidays from './pages/admin/AdminHolidays';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminLocations from './pages/admin/AdminLocations';
+import AdminLayoutBuilder from './pages/admin/AdminLayoutBuilder';
+import AdminPricing from './pages/admin/AdminPricing';
 import AdminLogin from './pages/admin/AdminLogin';
 import MaintenanceGuard from './components/MaintenanceGuard';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 
 /* Protected route — redirects to /admin/login if not authenticated */
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -60,6 +64,8 @@ const AppContent: React.FC = () => {
             <Route path="/details" element={<MaintenanceGuard><><Header /><BookingDetailsPage /><Footer /></></MaintenanceGuard>} />
             <Route path="/payment" element={<MaintenanceGuard><><Header /><PaymentPage /><Footer /></></MaintenanceGuard>} />
             <Route path="/confirmation" element={<MaintenanceGuard><><Header /><ConfirmationPage /><Footer /></></MaintenanceGuard>} />
+            <Route path="/privacy" element={<><Header /><PrivacyPolicy /><Footer /></>} />
+            <Route path="/terms" element={<><Header /><TermsOfService /><Footer /></>} />
 
             {/* Admin login (no layout, no maintenance guard) */}
             <Route path="/admin/login" element={<AdminLogin />} />
@@ -77,6 +83,8 @@ const AppContent: React.FC = () => {
               <Route path="holidays" element={<AdminHolidays />} />
               <Route path="announcements" element={<AdminAnnouncements />} />
               <Route path="locations" element={<AdminLocations />} />
+              <Route path="layout" element={<AdminLayoutBuilder />} />
+              <Route path="pricing" element={<AdminPricing />} />
             </Route>
           </Routes>
         </BookingProvider>

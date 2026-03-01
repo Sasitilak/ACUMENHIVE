@@ -87,17 +87,7 @@ const LandingPage: React.FC = () => {
                             >
                                 Book Now
                             </Button>
-                            <Button
-                                variant="outlined" size="large"
-                                sx={{
-                                    px: { xs: 3, md: 4 }, py: 1.5,
-                                    borderColor: theme.palette.divider,
-                                    color: 'text.primary',
-                                    '&:hover': { borderColor: 'text.secondary', bgcolor: 'transparent' },
-                                }}
-                            >
-                                Learn More
-                            </Button>
+
                         </Box>
                     </Box>
                 </Container>
