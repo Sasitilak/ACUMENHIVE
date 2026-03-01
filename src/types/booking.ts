@@ -14,6 +14,7 @@ export interface Slot {
     available: boolean;
     price: number;
     durationDays: number;
+    effectiveWeeks?: number;
 }
 
 export interface Seat {
@@ -31,14 +32,37 @@ export interface Seat {
     };
 }
 
+export interface RoomElement {
+    id?: number;
+    roomId: string;
+    type: 'wall' | 'entrance';
+    gridRow: number;
+    gridCol: number;
+    side: string;
+}
+
+export interface SeatPosition {
+    seatId: string;
+    gridRow: number;
+    gridCol: number;
+}
+
+export interface RoomLayout {
+    gridCols: number;
+    gridRows: number;
+    seatPositions: SeatPosition[];
+    elements: RoomElement[];
+}
+
 export interface Room {
     id: string;
     roomNo: string;
     name: string;
     seats: Seat[];
-    isAc: boolean; // Moved from Floor to Room
-    seatsCount?: number; // Helper for admin UI
-    price_daily?: number; // Base daily rate (or monthly if applicable)
+    isAc: boolean;
+    seatsCount?: number;
+    price_daily?: number;
+    pricing_tiers?: PricingConfig;
 }
 
 export interface Floor {
@@ -108,10 +132,17 @@ export interface Holiday {
     reason: string;
 }
 
+export interface PricingConfig {
+    price_1w: number;
+    price_2w: number;
+    price_3w: number;
+    price_1m: number;
+}
+
 export interface PricingRule {
     branchId: number;
     isAc: boolean;
-    dailyRate: number;
+    tiers: PricingConfig;
 }
 
 export interface Announcement {

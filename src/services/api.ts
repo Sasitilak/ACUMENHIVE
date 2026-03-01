@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import dayjs from 'dayjs';
-import type { Slot, Branch, BookingDetails, BookingResponse, Location, DashboardStats, Holiday, PricingRule, Announcement, Floor, Room, Seat } from '../types/booking';
+import type { Slot, Branch, BookingDetails, BookingResponse, Location, DashboardStats, Holiday, PricingRule, PricingConfig, Announcement, Floor, Room, Seat, RoomElement, SeatPosition } from '../types/booking';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -86,10 +86,18 @@ let mockHolidays: Holiday[] = [
 ];
 
 let mockPricingRules: PricingRule[] = [
-    { branchId: 1, isAc: true, dailyRate: 80 },
-    { branchId: 1, isAc: false, dailyRate: 50 },
-    { branchId: 2, isAc: true, dailyRate: 90 },
-    { branchId: 2, isAc: false, dailyRate: 60 },
+    {
+        branchId: 1, isAc: true, tiers: { price_1w: 700, price_2w: 1350, price_3w: 2000, price_1m: 2600 }
+    },
+    {
+        branchId: 1, isAc: false, tiers: { price_1w: 500, price_2w: 950, price_3w: 1400, price_1m: 1800 }
+    },
+    {
+        branchId: 2, isAc: true, tiers: { price_1w: 800, price_2w: 1550, price_3w: 2300, price_1m: 3000 }
+    },
+    {
+        branchId: 2, isAc: false, tiers: { price_1w: 600, price_2w: 1150, price_3w: 1700, price_1m: 2200 }
+    },
 ];
 
 let mockAnnouncements: Announcement[] = [
@@ -200,16 +208,14 @@ export const getBranches = async (): Promise<Branch[]> => {
                 rooms: roomData
                     .filter(r => r.floor_id === f.id)
                     .map(r => ({
-                        id: r.id, // now UUID
+                        id: r.id,
                         roomNo: r.room_no,
                         name: r.name || `Room ${r.room_no}`,
-                        isAc: r.is_ac, // Updated source
-                        price_daily: r.price_daily, // Updated source
+                        isAc: r.is_ac,
+                        price_daily: r.price_daily,
+                        pricing_tiers: r.pricing_tiers,
                         seats: seatData
-                            .filter(s => s.room_id === r.id) // note: seats now likely link to room_id not floor_id in new schema
-                            // BUT in legacy/transition 'available_seats' view might still use floor_id if not updated.
-                            // Safest is if 'available_seats' view is updated. For now, assuming seatData works similarly.
-                            // Actually, in the new schema, seats have room_id.
+                            .filter(s => s.room_id === r.id)
                             .map(s => ({
                                 id: String(s.id),
                                 seatNo: s.seat_no,
@@ -452,6 +458,14 @@ export const createAdminBooking = async (details: Partial<BookingDetails>, locat
     }).select().single();
 
     if (error) throw error;
+
+    // Trigger WhatsApp Notification (Edge Function) for Admin Booking
+    supabase.functions.invoke('send-whatsapp', {
+        body: { booking: data, template: 'booking_confirmation' }
+    }).then(({ error: waErr }) => {
+        if (waErr) console.error("Admin Booking WhatsApp failed:", waErr);
+    });
+
     return mapBookingRow(data);
 };
 
@@ -640,6 +654,7 @@ export const getAdminSeats = async (): Promise<any[]> => {
                         room_name: r.name,
                         room_no: r.roomNo,
                         price_daily: r.price_daily || 50,
+                        pricing_tiers: r.pricing_tiers || { price_1w: 500, price_2w: 900, price_3w: 1200, price_1m: 1500 },
                     }))
                 )
             )
@@ -648,7 +663,7 @@ export const getAdminSeats = async (): Promise<any[]> => {
 
     const { data, error } = await supabase
         .from('seats')
-        .select('id, seat_no, is_blocked, room_id, rooms(floor_id, is_ac, name, room_no, price_daily, floors(branch_id, floor_number, branches(name)))')
+        .select('id, seat_no, is_blocked, room_id, rooms(floor_id, is_ac, name, room_no, price_daily, pricing_tiers, floors(branch_id, floor_number, branches(name)))')
         .order('id');
 
     if (error) throw new Error(`getAdminSeats failed: ${error.message}`);
@@ -669,6 +684,7 @@ export const getAdminSeats = async (): Promise<any[]> => {
             room_name: (room?.name ?? 'Main Floor') as string,
             room_no: (room?.room_no ?? '') as string,
             price_daily: (room?.price_daily ?? 50) as number,
+            pricing_tiers: (room?.pricing_tiers as any) ?? { price_1w: 500, price_2w: 900, price_3w: 1200, price_1m: 1500 },
         };
     });
 };
@@ -686,7 +702,116 @@ export const unblockSeat = async (id: number) => {
 };
 
 
-// ─── Admin: Pricing ──────────────────────────────────────────────
+// ─── Admin: Room Layout ──────────────────────────────────────────
+
+export const getRoomLayout = async (roomId: string): Promise<{
+    gridCols: number;
+    gridRows: number;
+    seatPositions: SeatPosition[];
+    elements: RoomElement[];
+}> => {
+    if (!isSupabaseConfigured()) {
+        await delay(300);
+        return { gridCols: 8, gridRows: 10, seatPositions: [], elements: [] };
+    }
+
+    const { data: elemData, error: elemError } = await supabase
+        .from('room_elements')
+        .select('*')
+        .eq('room_id', roomId);
+    if (elemError) throw elemError;
+
+    const rows = elemData || [];
+
+    // Parse config entry (type='config')
+    const configRow = rows.find((e: any) => e.type === 'config');
+    const gridCols = configRow?.grid_col || 8;
+    const gridRows = configRow?.grid_row || 10;
+
+    // Parse seat positions (type='seat', seat_id stored in 'side' column)
+    const seatPositions: SeatPosition[] = rows
+        .filter((e: any) => e.type === 'seat')
+        .map((e: any) => ({
+            seatId: e.side, // seat ID stored in the side column
+            gridRow: e.grid_row,
+            gridCol: e.grid_col,
+        }));
+
+    // Parse wall & entrance elements
+    const elements: RoomElement[] = rows
+        .filter((e: any) => e.type === 'wall' || e.type === 'entrance')
+        .map((e: any) => ({
+            id: e.id,
+            roomId: e.room_id,
+            type: e.type,
+            gridRow: e.grid_row,
+            gridCol: e.grid_col,
+            side: e.side,
+        }));
+
+    return { gridCols, gridRows, seatPositions, elements };
+};
+
+export const saveRoomLayout = async (
+    roomId: string,
+    gridCols: number,
+    gridRows: number,
+    seatPositions: SeatPosition[],
+    elements: Omit<RoomElement, 'id' | 'roomId'>[]
+): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        await delay(500);
+        return;
+    }
+
+    // Delete all existing layout data for this room
+    const { error: delErr } = await supabase
+        .from('room_elements')
+        .delete()
+        .eq('room_id', roomId);
+    if (delErr) throw delErr;
+
+    // Build all rows to insert
+    const allRows: any[] = [];
+
+    // 1. Config row — store grid dimensions
+    allRows.push({
+        room_id: roomId,
+        type: 'config',
+        grid_row: gridRows,
+        grid_col: gridCols,
+        side: '',
+    });
+
+    // 2. Seat position rows — seat ID stored in 'side' column
+    for (const sp of seatPositions) {
+        allRows.push({
+            room_id: roomId,
+            type: 'seat',
+            grid_row: sp.gridRow,
+            grid_col: sp.gridCol,
+            side: sp.seatId,
+        });
+    }
+
+    // 3. Wall & entrance rows
+    for (const e of elements) {
+        allRows.push({
+            room_id: roomId,
+            type: e.type,
+            grid_row: e.gridRow,
+            grid_col: e.gridCol,
+            side: e.side,
+        });
+    }
+
+    if (allRows.length > 0) {
+        const { error: insErr } = await supabase
+            .from('room_elements')
+            .insert(allRows);
+        if (insErr) throw insErr;
+    }
+};
 
 // ─── Admin: Holidays ─────────────────────────────────────────────
 
@@ -889,7 +1014,8 @@ export const addRoom = async (branchId: number, floorNumber: number, room: Omit<
             name: room.name,
             is_ac: room.isAc,
             price_daily: room.price_daily || 50,
-            seats_count: room.seatsCount
+            seats_count: room.seatsCount,
+            pricing_tiers: room.pricing_tiers || null
         })
         .select()
         .single();
@@ -959,6 +1085,7 @@ export const updateRoom = async (branchId: number, floorNumber: number, roomId: 
         if (updates.roomNo) room.roomNo = updates.roomNo;
         if (updates.isAc !== undefined) room.isAc = updates.isAc;
         if (updates.price_daily !== undefined) room.price_daily = updates.price_daily;
+        if (updates.pricing_tiers !== undefined) room.pricing_tiers = updates.pricing_tiers;
 
         return room;
     }
@@ -984,6 +1111,7 @@ export const updateRoom = async (branchId: number, floorNumber: number, roomId: 
     if (updates.isAc !== undefined) roomUpdates.is_ac = updates.isAc;
     if (updates.price_daily !== undefined) roomUpdates.price_daily = updates.price_daily;
     if (updates.seatsCount !== undefined) roomUpdates.seats_count = updates.seatsCount;
+    if (updates.pricing_tiers !== undefined) roomUpdates.pricing_tiers = updates.pricing_tiers;
 
     if (Object.keys(roomUpdates).length > 0) {
         const { error } = await supabase.from('rooms').update(roomUpdates).eq('id', roomId);
@@ -1083,19 +1211,23 @@ export const getPricingRules = async (): Promise<PricingRule[]> => {
     if (!isSupabaseConfigured()) { await delay(300); return mockPricingRules; }
     const { data, error } = await supabase.from('pricing_rules').select('*');
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).map((r: any) => ({
+        branchId: r.branch_id,
+        isAc: r.is_ac,
+        tiers: r.tiers || { price_1w: 0, price_2w: 0, price_3w: 0, price_1m: 0 },
+    }));
 };
 
-export const updatePricingRule = async (branchId: number, isAc: boolean, dailyRate: number) => {
+export const updatePricingRule = async (branchId: number, isAc: boolean, tiers: PricingConfig) => {
     if (!isSupabaseConfigured()) {
         await delay(400);
         const idx = mockPricingRules.findIndex(r => r.branchId === branchId && r.isAc === isAc);
-        if (idx !== -1) mockPricingRules[idx].dailyRate = dailyRate;
-        else mockPricingRules.push({ branchId, isAc, dailyRate });
+        if (idx !== -1) mockPricingRules[idx].tiers = tiers;
+        else mockPricingRules.push({ branchId, isAc, tiers });
         return;
     }
     const { error } = await supabase.from('pricing_rules')
-        .upsert({ branch_id: branchId, is_ac: isAc, daily_rate: dailyRate }, { onConflict: 'branch_id,is_ac' });
+        .upsert({ branch_id: branchId, is_ac: isAc, tiers }, { onConflict: 'branch_id,is_ac' });
     if (error) throw error;
 };
 

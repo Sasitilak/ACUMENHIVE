@@ -1,0 +1,224 @@
+import React, { useRef } from 'react';
+import { Box, Tooltip, useTheme, Typography, Paper } from '@mui/material';
+import { motion } from 'framer-motion';
+import type { Desk, Wall, Room } from '../types/booking';
+
+interface BlueprintMapProps {
+    viewBox?: string;
+    floorPolygon?: { x: number; y: number }[];
+    walls?: Wall[];
+    desks?: Desk[];
+    rooms?: Room[];
+    onSeatClick: (seat: any) => void;
+    selectedSeatNo?: string | null;
+    minWidth?: number;
+}
+
+const BlueprintMap: React.FC<BlueprintMapProps> = ({
+    viewBox = "0 0 550 850", // Accurate default
+    floorPolygon = [],
+    walls = [],
+    desks = [],
+    rooms = [],
+    onSeatClick,
+    selectedSeatNo,
+    minWidth = 600 // Increased slightly for better "webview" feel
+}) => {
+    const theme = useTheme();
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Integrated Theme Colors
+    const colors = {
+        floor: theme.palette.mode === 'dark' ? '#1e293b' : '#f8fafc', // Slate-50/Slate-900 look
+        seat: theme.palette.success.light,
+        seatBorder: theme.palette.success.main,
+        wall: theme.palette.divider,
+        desk: theme.palette.mode === 'dark' ? '#334155' : '#e2e8f0',
+        text: theme.palette.getContrastText(theme.palette.success.main),
+        selected: theme.palette.error.main,
+        selectedBorder: theme.palette.error.dark,
+        roomLabel: theme.palette.text.disabled
+    };
+
+    return (
+        <Paper
+            elevation={0}
+            sx={{
+                width: '100%',
+                overflow: 'hidden',
+                borderRadius: 3,
+                border: `1px solid ${theme.palette.divider}`,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                p: { xs: 0, md: 2 }
+            }}
+        >
+            <Box
+                sx={{
+                    width: '100%',
+                    overflowX: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    p: { xs: 2, md: 4 },
+                    touchAction: 'pan-x pan-y', // Explicitly allow both horizontal and vertical native scrolling
+                    '&::-webkit-scrollbar': { height: 6 },
+                    '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
+                    '&::-webkit-scrollbar-thumb': {
+                        bgcolor: theme.palette.divider,
+                        borderRadius: 3,
+                        '&:hover': { bgcolor: theme.palette.text.disabled }
+                    }
+                }}
+            >
+                <Box
+                    ref={containerRef}
+                    sx={{
+                        width: '100%',
+                        minWidth: minWidth,
+                        maxWidth: 900,
+                        position: 'relative',
+                        bgcolor: colors.floor,
+                        borderRadius: 2,
+                        p: 3,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                        border: `1px solid ${theme.palette.divider}`,
+                    }}
+                >
+                    <svg
+                        viewBox={viewBox}
+                        style={{
+                            width: '100%',
+                            height: 'auto',
+                            display: 'block',
+                            // Removed pointerEvents: 'none' to allow the SVG to be a touch target for scrolling
+                        }}
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        {/* Floor Polygon */}
+                        {floorPolygon.length > 0 && (
+                            <polygon
+                                points={floorPolygon.map(p => `${p.x},${p.y}`).join(' ')}
+                                fill={colors.floor}
+                                stroke={colors.wall}
+                                strokeWidth="1"
+                                style={{ pointerEvents: 'none' }} // Purely decorative
+                            />
+                        )}
+
+                        {/* Desks (Themed Lines) */}
+                        {desks.map((d, i) => (
+                            <line
+                                key={`desk-${i}`}
+                                x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2}
+                                stroke={colors.desk}
+                                strokeWidth="8"
+                                strokeLinecap="round"
+                                style={{ pointerEvents: 'none' }} // Purely decorative
+                            />
+                        ))}
+
+                        {/* Internal Walls */}
+                        {walls.map((wall, i) => (
+                            <polyline
+                                key={`wall-${i}`}
+                                points={wall.points.map(p => `${p.x},${p.y}`).join(' ')}
+                                fill="none"
+                                stroke={theme.palette.text.secondary}
+                                strokeWidth="2"
+                                opacity={0.4}
+                                style={{ pointerEvents: 'none' }} // Purely decorative
+                            />
+                        ))}
+
+                        {/* Room Labels */}
+                        {rooms.map((room) => {
+                            if (!room.polygon || room.polygon.length < 1) return null;
+                            const centerX = room.polygon.reduce((sum, p) => sum + p.x, 0) / room.polygon.length;
+                            const centerY = room.polygon.reduce((sum, p) => sum + p.y, 0) / room.polygon.length;
+                            return (
+                                <text
+                                    key={`label-${room.id}`}
+                                    x={centerX}
+                                    y={centerY}
+                                    textAnchor="middle"
+                                    fill={colors.roomLabel}
+                                    style={{
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        pointerEvents: 'none',
+                                        letterSpacing: '0.1em',
+                                        textTransform: 'uppercase'
+                                    }}
+                                >
+                                    {room.name}
+                                </text>
+                            );
+                        })}
+
+                        {/* Seats */}
+                        {rooms.flatMap(room => room.seats.map((seat) => {
+                            const isSelected = selectedSeatNo === seat.seatNo;
+                            const available = seat.available;
+
+                            const x = seat.x ?? 0;
+                            const y = seat.y ?? 0;
+                            const label = seat.label || seat.seatNo;
+
+                            // Standardized Seat UI
+                            const width = 32;
+                            const height = 28;
+
+                            return (
+                                <g
+                                    key={seat.id}
+                                    transform={`translate(${x},${y})`}
+                                    style={{
+                                        cursor: available ? 'pointer' : 'not-allowed',
+                                        pointerEvents: 'auto' // Re-enable pointer events for seats
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (available) onSeatClick({ ...seat, room_name: room.name });
+                                    }}
+                                >
+                                    <Tooltip
+                                        title={`${room.name} - Seat ${seat.seatNo} (${available ? 'Available' : 'Occupied'})`}
+                                        arrow
+                                        placement="top"
+                                    >
+                                        <g>
+                                            <motion.rect
+                                                width={width}
+                                                height={height}
+                                                rx="6"
+                                                fill={isSelected ? colors.selected : (available ? colors.seat : theme.palette.action.disabledBackground)}
+                                                stroke={isSelected ? colors.selectedBorder : (available ? colors.seatBorder : theme.palette.divider)}
+                                                strokeWidth={isSelected ? 2 : 1}
+                                                whileHover={available ? { scale: 1.1, filter: 'brightness(1.05)' } : {}}
+                                                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                            />
+                                            <text
+                                                x={width / 2}
+                                                y={height / 2 + 5}
+                                                textAnchor="middle"
+                                                fill={isSelected ? '#fff' : (available ? theme.palette.getContrastText(colors.seat) : theme.palette.text.disabled)}
+                                                style={{ fontSize: '11px', fontWeight: 800, pointerEvents: 'none', fontFamily: theme.typography.fontFamily }}
+                                            >
+                                                {label}
+                                            </text>
+                                        </g>
+                                    </Tooltip>
+                                </g>
+                            );
+                        }))}
+                    </svg>
+                </Box>
+                <Typography variant="caption" color="text.disabled" sx={{ mt: 2, display: { xs: 'block', sm: 'none' }, fontWeight: 500 }}>
+                    ← Swipe left/right to see more map →
+                </Typography>
+            </Box>
+        </Paper>
+    );
+};
+
+export default BlueprintMap;

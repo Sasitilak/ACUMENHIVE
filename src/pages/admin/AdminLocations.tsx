@@ -352,12 +352,35 @@ const LocationDialog: React.FC<LocationDialogProps> = ({ open, type, mode, data,
 
     useEffect(() => {
         if (data) {
-            if (type === 'room') setFormData({ ...data, seatsCount: data.seats?.length || 0, price_daily: data.price_daily || 50, isAc: data.isAc || false });
+            if (type === 'room') {
+                let initialPricing = { price_1w: 500, price_2w: 900, price_3w: 1200, price_1m: 1500 };
+                if (Array.isArray(data.pricing_tiers)) {
+                    // Legacy migration: old format was per-week. We need total prices.
+                    initialPricing = {
+                        price_1w: data.pricing_tiers[0]?.weeklyRate || 500,
+                        price_2w: data.pricing_tiers[1] ? data.pricing_tiers[1].weeklyRate * 2 : 900,
+                        price_3w: data.pricing_tiers[2] ? data.pricing_tiers[2].weeklyRate * 3 : 1200,
+                        price_1m: data.pricing_tiers[3] ? data.pricing_tiers[3].weeklyRate * 4 : 1500,
+                    };
+                } else if (data.pricing_tiers) {
+                    initialPricing = { ...initialPricing, ...data.pricing_tiers };
+                }
+                setFormData({ ...data, seatsCount: data.seats?.length || 0, price_daily: data.price_daily || 50, isAc: data.isAc || false, pricing_tiers: initialPricing });
+            }
             else setFormData(data);
+        } else {
+            if (type === 'floor') setFormData({ floorNumber: 1 });
+            else if (type === 'room') setFormData({
+                name: '', roomNo: '', seatsCount: 10, price_daily: 50, isAc: false,
+                pricing_tiers: {
+                    price_1w: 500,
+                    price_2w: 900,
+                    price_3w: 1200,
+                    price_1m: 1500
+                }
+            });
+            else setFormData({ name: '', address: '' });
         }
-        else if (type === 'floor') setFormData({ floorNumber: 1 });
-        else if (type === 'room') setFormData({ name: '', roomNo: '', seatsCount: 10, price_daily: 50, isAc: false });
-        else setFormData({ name: '', address: '' });
     }, [data, type, open]);
 
     return (
@@ -416,6 +439,33 @@ const LocationDialog: React.FC<LocationDialogProps> = ({ open, type, mode, data,
                             onChange={(e) => setFormData({ ...formData, seatsCount: parseInt(e.target.value) })}
                             helperText="Seats will be automatically generated (S1, S2, ...)"
                         />
+
+                        <Divider sx={{ my: 1 }} />
+                        <Typography variant="subtitle2" fontWeight={700}>Weekly Pricing Tiers</Typography>
+                        <Typography variant="caption" color="text.secondary">Specify rates based on duration</Typography>
+
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
+                            {[
+                                { key: 'price_1w', label: '1 Week Total' },
+                                { key: 'price_2w', label: '2 Weeks Total' },
+                                { key: 'price_3w', label: '3 Weeks Total' },
+                                { key: 'price_1m', label: '1 Month Total (4 Weeks)' }
+                            ].map(tier => (
+                                <TextField
+                                    key={tier.key}
+                                    label={tier.label} type="number" size="small" fullWidth
+                                    value={formData.pricing_tiers?.[tier.key] || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        pricing_tiers: {
+                                            ...(formData.pricing_tiers || {}),
+                                            [tier.key]: parseInt(e.target.value) || 0
+                                        }
+                                    })}
+                                    InputProps={{ startAdornment: <Typography variant="caption" sx={{ mr: 0.5 }}>₹</Typography> }}
+                                />
+                            ))}
+                        </Box>
                     </Box>
                 )}
             </DialogContent>

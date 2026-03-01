@@ -64,7 +64,11 @@ const ConfirmationPage: React.FC = () => {
                     {[
                         { icon: <CalendarTodayIcon sx={{ fontSize: 18 }} />, label: 'Period', value: formatDate() },
                         { icon: <CalendarTodayIcon sx={{ fontSize: 18 }} />, label: 'Duration', value: selectedSlot?.time },
-                        { icon: <LocationOnIcon sx={{ fontSize: 18 }} />, label: 'Location', value: selectedLocation ? `Branch ${selectedLocation.branch} · Fl ${selectedLocation.floor} · Rm ${selectedLocation.roomNo}` : '' },
+                        {
+                            icon: <LocationOnIcon sx={{ fontSize: 18 }} />,
+                            label: 'Location',
+                            value: selectedLocation ? `${selectedLocation.branchName || `Branch ${selectedLocation.branch}`} · Floor ${selectedLocation.floor} · ${selectedLocation.roomNo}` : ''
+                        },
                         { icon: <ChairIcon sx={{ fontSize: 18 }} />, label: 'Seat', value: selectedLocation?.seatNo },
                     ].map((r, i) => (
                         <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
